@@ -98,3 +98,4 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .file-list li.error .state { color: var(--err); }
 
 footer { margin-top: 32px; font-size: .85rem; color: var(--muted); }
+.credit { margin: 16px 0 0; padding-top: 16px; border-top: 1px solid var(--border); }
