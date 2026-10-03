@@ -1,4 +1,4 @@
-import { convertImage, detectFormat } from './convert.js';
+import { convertImage } from './convert.js';
 import { buildZipParts } from './zip.js';
 import { webpLosslessSupported } from './webp.js';
 
@@ -158,7 +158,7 @@ async function onConverted(item, res) {
   const gamut = res.wideGamut ? ' · צבע רחב P3' : '';
   item.meta.textContent =
     `${res.width}×${res.height} · ${formatSize(item.file.size)} ← ${formatSize(res.blob.size)}${gamut}`;
-  setStatus(item, 'done', 'הושלם');
+  setStatus(item, 'done', res.alreadyPng ? 'כבר היה PNG – נשמר בשם הנכון' : 'הושלם');
 
   const download = document.createElement('button');
   download.type = 'button';
@@ -203,8 +203,9 @@ async function addFiles(fileArray, { fromFolder = false } = {}) {
     const item = { id: nextId++, file, outBase: base, status: 'queued', options };
     renderItem(item);
     items.set(item.id, item);
+    // The real format is checked from the file's content during conversion,
+    // which reports exactly what a mislabelled file actually is.
     if (file.size > MAX_FILE_SIZE) setStatus(item, 'error', 'הקובץ גדול מדי');
-    else if (!looksImage && !(await detectFormat(file))) setStatus(item, 'error', 'לא קובץ JPG');
     else queue.push(item);
   }
   const notes = [];

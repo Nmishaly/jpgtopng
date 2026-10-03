@@ -18,12 +18,55 @@ import { WEBP_MAX_DIMENSION } from './webp.js';
 
 const STRIP_PIXELS = 4_000_000;
 
-/** 'jpeg', 'heic', or null for anything else. */
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/**
+ * The file's real format, from its first bytes (file names can be wrong:
+ * some devices save PNG screenshots with a .jpg name).
+ * @returns {Promise<'jpeg'|'heic'|'png'|'webp'|'gif'|'bmp'|'tiff'|null>}
+ */
 export async function detectFormat(blob) {
   const head = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+  const ascii = (from, to) => String.fromCharCode(...head.subarray(from, to));
   if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return 'jpeg';
   if (head.length >= 12 && isHeic(head)) return 'heic';
+  if (PNG_SIGNATURE.every((b, i) => head[i] === b)) return 'png';
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'webp';
+  if (ascii(0, 4) === 'GIF8') return 'gif';
+  if (ascii(0, 2) === 'BM') return 'bmp';
+  if (ascii(0, 4) === 'II*\0' || ascii(0, 4) === 'MM\0*') return 'tiff'; // also DNG (RAW)
   return null;
+}
+
+const UNSUPPORTED = {
+  webp: 'הקובץ הוא בפועל WebP ולא JPG, ולכן לא הומר',
+  gif: 'הקובץ הוא בפועל GIF ולא JPG, ולכן לא הומר',
+  bmp: 'הקובץ הוא בפועל BMP ולא JPG, ולכן לא הומר',
+  tiff: 'הקובץ הוא TIFF או RAW (DNG) ולא JPG – פורמט זה אינו נתמך',
+};
+
+/**
+ * A file that is already a PNG (typically a screenshot saved with a .jpg
+ * name): it is kept byte-for-byte and only gets the right extension.
+ */
+async function passThroughPng(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const dv = new DataView(bytes.buffer);
+  const bitmap = await decodeBitmap(file);
+  try {
+    return {
+      blob: new Blob([bytes], { type: 'image/png' }),
+      crc: crc32(bytes),
+      width: dv.getUint32(16),
+      height: dv.getUint32(20),
+      extension: 'png',
+      wideGamut: false,
+      alreadyPng: true,
+      thumb: await thumbnail({ bitmap }),
+    };
+  } finally {
+    bitmap.close();
+  }
 }
 
 function makeCanvas(width, height) {
@@ -212,7 +255,9 @@ async function thumbnail(src) {
  */
 export async function convertImage(file, { keepMetadata = false, format = 'png' } = {}) {
   const kind = await detectFormat(file);
-  if (!kind) throw new Error('הקובץ אינו JPG או HEIC תקין');
+  if (kind === 'png') return passThroughPng(file);
+  if (UNSUPPORTED[kind]) throw new Error(UNSUPPORTED[kind]);
+  if (!kind) throw new Error('הקובץ אינו תמונת JPG תקינה – ייתכן שהוא פגום או שלא הועתק עד הסוף');
   const src = await loadSource(file, kind, keepMetadata);
   try {
     let result;

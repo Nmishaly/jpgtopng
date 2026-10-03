@@ -111,8 +111,38 @@ test('WebP output is never lossy: pixel-exact or refused', async ({ page }) => {
 test('rejects files that are not images', async ({ page }) => {
   await page.setInputFiles('#file-input', [{ name: 'fake.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('nope') }]);
   await waitForIdle(page);
-  await expect(page.locator('li.error .state')).toHaveText('הקובץ אינו JPG או HEIC תקין');
+  await expect(page.locator('li.error .state')).toContainText('אינו תמונת JPG תקינה');
   await expect(page.locator('#download-zip')).toBeDisabled();
+});
+
+test('a PNG screenshot saved with a .jpg name is kept as-is and renamed', async ({ page }) => {
+  // Some devices (e.g. drone controllers) save PNG screenshots as *.jpg.
+  const png = Buffer.from(await page.evaluate(async () => {
+    const c = document.createElement('canvas');
+    c.width = 320;
+    c.height = 240;
+    const x = c.getContext('2d');
+    x.fillStyle = '#2a6';
+    x.fillRect(0, 0, 320, 240);
+    x.fillStyle = '#fff';
+    x.fillText('screenshot', 20, 40);
+    const b = new Uint8Array(await (await new Promise((r) => c.toBlob(r, 'image/png'))).arrayBuffer());
+    return Array.from(b);
+  }));
+  await page.setInputFiles('#file-input', [{ name: '30.09.2026_120405_screenshot.jpg', mimeType: 'image/jpeg', buffer: png }]);
+  await waitForIdle(page);
+  await expect(page.locator('li .state')).toHaveText('כבר היה PNG – נשמר בשם הנכון');
+  await expect(page.locator('li .meta')).toContainText('320×240');
+  const { name, bytes } = await downloadItem(page);
+  expect(name).toBe('30.09.2026_120405_screenshot.png');
+  expect(bytes.equals(png)).toBe(true);
+});
+
+test('says what a mislabelled non-JPG file really is', async ({ page }) => {
+  const dng = Buffer.concat([Buffer.from('II*\0', 'latin1'), Buffer.alloc(60)]); // TIFF/DNG header
+  await page.setInputFiles('#file-input', [{ name: 'DJI_0001.jpg', mimeType: 'image/jpeg', buffer: dng }]);
+  await waitForIdle(page);
+  await expect(page.locator('li.error .state')).toContainText('RAW (DNG)');
 });
 
 // ---------- Page behaviour: Chromium only (no engine-specific image work) ----------
