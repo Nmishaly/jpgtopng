@@ -134,7 +134,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 4096
           script: |
             adb install -r JPGtoPNG-debug.apk
-            node android/emulator-check.mjs || (adb logcat -d -s JpgToPng chromium AndroidRuntime | tail -200; exit 1)
+            timeout 480 node android/emulator-check.mjs || (echo "check failed or timed out (exit $?)"; adb logcat -d -s JpgToPng chromium AndroidRuntime ActivityManager | tail -250; exit 1)
       - uses: actions/upload-artifact@v4
         if: always()
         with:

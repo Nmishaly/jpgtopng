@@ -21,12 +21,17 @@ const sh = async (cmd) => (await device.shell(cmd)).toString();
 log('device', device.model(), 'API', (await sh('getprop ro.build.version.sdk')).trim());
 
 // Android 9 and older ask for the storage permission at first save; grant it upfront.
+log('granting storage permission');
 await sh(`pm grant ${PKG} android.permission.WRITE_EXTERNAL_STORAGE`).catch(() => {});
 await sh(`rm -rf /sdcard/Pictures/JPGtoPNG /sdcard/Download/JPGtoPNG`);
-await sh(`am start -W -n ${PKG}/.MainActivity`);
+log('starting the app');
+await sh(`am start -n ${PKG}/.MainActivity`);
 
+log('connecting to the WebView');
 const webview = await device.webView({ pkg: PKG }, { timeout: 120_000 });
+log('WebView found, opening page');
 const page = await webview.page();
+log('page attached');
 page.on('console', (m) => log('console:', m.text()));
 page.on('pageerror', (e) => log('pageerror:', e.message));
 await page.waitForSelector('#dropzone', { timeout: 60_000 });
