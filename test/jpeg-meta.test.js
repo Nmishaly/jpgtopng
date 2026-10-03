@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readJpegMeta, classifyIcc, exifWithUprightOrientation } from '../public/jpeg-meta.js';
+import { readJpegMeta, classifyIcc, exifWithUprightOrientation, exifOrientation } from '../public/jpeg-meta.js';
 import { DISPLAY_P3_ICC } from '../public/icc.js';
 
 function segment(marker, payload) {
@@ -64,4 +64,21 @@ test('resets EXIF orientation in both byte orders', () => {
     assert.equal(out.getUint16(18, le), 1);
     assert.equal(b.getUint16(18, le), 6, 'input untouched');
   }
+});
+
+test('reads the EXIF orientation', () => {
+  for (const le of [false, true]) {
+    const b = new DataView(new ArrayBuffer(26));
+    b.setUint16(0, le ? 0x4949 : 0x4d4d);
+    b.setUint16(2, 42, le);
+    b.setUint32(4, 8, le);
+    b.setUint16(8, 1, le);
+    b.setUint16(10, 0x0112, le);
+    b.setUint16(12, 3, le);
+    b.setUint32(14, 1, le);
+    b.setUint16(18, 6, le);
+    assert.equal(exifOrientation(new Uint8Array(b.buffer)), 6);
+  }
+  assert.equal(exifOrientation(null), 1);
+  assert.equal(exifOrientation(new Uint8Array([1, 2, 3])), 1);
 });

@@ -1,4 +1,4 @@
-import { readJpegMeta, classifyIcc, exifWithUprightOrientation } from './jpeg-meta.js';
+import { readJpegMeta, classifyIcc, exifWithUprightOrientation, exifOrientation } from './jpeg-meta.js';
 import { DISPLAY_P3_ICC } from './icc.js';
 import { PngEncoder, GrayMismatch } from './png.js';
 import { crc32 } from './zip.js';
@@ -98,11 +98,85 @@ function physFromDensity(d) {
   return { x: perMetre(d.x), y: perMetre(d.y) };
 }
 
-async function decodeBitmap(blob) {
+// EXIF orientation. Current browsers apply it when asked with
+// imageOrientation: 'from-image'; older engines (e.g. Chrome/WebView 83, the
+// factory WebView of Android 11) reject that value, and some of them don't
+// rotate at all. A tiny JPEG tagged "rotate 90°" (2×1 pixels, orientation 6)
+// tells which case applies; in the last one the pixels are rotated here.
+const ORIENTATION_PROBE =
+  '/9j/4QAiRXhpZgAATU0AKgAAAAgAAQESAAMAAAABAAYAAAAAAAD/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAABAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJ+AD//Z';
+
+let orientationMode;
+/** @returns {Promise<'option'|'auto'|'manual'>} */
+function detectOrientationMode() {
+  orientationMode ??= (async () => {
+    const probe = new Blob([Uint8Array.from(atob(ORIENTATION_PROBE), (c) => c.charCodeAt(0))],
+      { type: 'image/jpeg' });
+    try {
+      const b = await createImageBitmap(probe, { imageOrientation: 'from-image' });
+      const rotated = b.height === 2;
+      b.close();
+      if (rotated) return 'option';
+    } catch {
+      // value not supported by this engine
+    }
+    try {
+      const b = await decodeUnrotated(probe);
+      const rotated = b.height === 2;
+      b.close();
+      return rotated ? 'auto' : 'manual';
+    } catch {
+      return 'manual';
+    }
+  })();
+  return orientationMode;
+}
+
+/** Decode without applying EXIF orientation ('none' is valid in old engines too). */
+async function decodeUnrotated(blob) {
   try {
-    return await createImageBitmap(blob, { imageOrientation: 'from-image' });
+    return await createImageBitmap(blob, { imageOrientation: 'none' });
+  } catch {
+    return createImageBitmap(blob);
+  }
+}
+
+/** Rotate/flip a bitmap per EXIF orientation 2–8. Exact: whole-pixel moves only. */
+export async function orient(bitmap, orientation) {
+  const w = bitmap.width;
+  const h = bitmap.height;
+  const swap = orientation >= 5;
+  const canvas = makeCanvas(swap ? h : w, swap ? w : h);
+  const ctx = canvas.getContext('2d');
+  const transforms = {
+    2: [-1, 0, 0, 1, w, 0],
+    3: [-1, 0, 0, -1, w, h],
+    4: [1, 0, 0, -1, 0, h],
+    5: [0, 1, 1, 0, 0, 0],
+    6: [0, 1, -1, 0, h, 0],
+    7: [0, -1, -1, 0, h, w],
+    8: [0, -1, 1, 0, 0, w],
+  };
+  ctx.setTransform(...transforms[orientation]);
+  ctx.drawImage(bitmap, 0, 0);
+  return createImageBitmap(canvas);
+}
+
+async function decodeBitmap(blob, orientation = 1) {
+  const mode = await detectOrientationMode();
+  let bitmap;
+  try {
+    if (mode === 'option') bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+    else if (mode === 'manual') bitmap = await decodeUnrotated(blob);
+    else bitmap = await createImageBitmap(blob);
   } catch {
     throw new Error('לא ניתן לפענח את התמונה');
+  }
+  if (mode !== 'manual' || orientation <= 1) return bitmap;
+  try {
+    return await orient(bitmap, orientation);
+  } finally {
+    bitmap.close();
   }
 }
 
@@ -116,7 +190,7 @@ async function loadSource(file, kind, keepMetadata) {
     const meta = await readJpegMeta(file);
     const wide = classifyIcc(meta.icc) === 'wide' && supportsP3();
     return {
-      bitmap: await decodeBitmap(file),
+      bitmap: await decodeBitmap(file, exifOrientation(meta.exif)),
       wide,
       gray: meta.components === 1 && !wide,
       exif: keepMetadata && meta.exif ? exifWithUprightOrientation(meta.exif) : undefined,

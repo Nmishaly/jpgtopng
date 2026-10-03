@@ -64,6 +64,46 @@ test('applies EXIF rotation; keeps EXIF only when asked', async ({ page }) => {
   expect(exif.data.readUInt16BE(18)).toBe(1); // orientation reset: pixels are already upright
 });
 
+test('manual EXIF rotation (used on old engines) matches the browser for all 8 orientations', async ({ page }) => {
+  // Old engines can't rotate by EXIF, so the app rotates pixels itself. Check
+  // that transform against this browser's own EXIF handling.
+  const base = await makeJpeg(page, 60, 40, { seed: 5 });
+  const tiff = (o) => Buffer.from([0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, o, 0, 0, 0, 0, 0, 0]);
+  const tagged = [1, 2, 3, 4, 5, 6, 7, 8].map((o) =>
+    insertSegment(base, 0xe1, Buffer.concat([Buffer.from('Exif\0\0', 'latin1'), tiff(o)])).toString('base64'));
+  const results = await page.evaluate(async ([baseB64, tagged]) => {
+    const { orient } = await import('/convert.js');
+    const blob = (b64) => new Blob([Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0))]);
+    const pixels = (bm) => {
+      const c = document.createElement('canvas');
+      c.width = bm.width;
+      c.height = bm.height;
+      const x = c.getContext('2d');
+      x.drawImage(bm, 0, 0);
+      return { w: bm.width, h: bm.height, d: x.getImageData(0, 0, bm.width, bm.height).data };
+    };
+    const upright = await createImageBitmap(blob(baseB64)); // no EXIF: decoded as stored
+    const out = [];
+    for (let o = 1; o <= 8; o++) {
+      const n = pixels(await createImageBitmap(blob(tagged[o - 1]), { imageOrientation: 'from-image' }));
+      const m = pixels(o === 1 ? upright : await orient(upright, o));
+      if (n.w !== m.w || n.h !== m.h) {
+        out.push(`orientation ${o}: ${n.w}x${n.h} vs ${m.w}x${m.h}`);
+        continue;
+      }
+      let diff = 0;
+      for (let k = 0; k < n.d.length; k++) diff = Math.max(diff, Math.abs(n.d[k] - m.d[k]));
+      out.push(`orientation ${o}: ${n.w}x${n.h} diff ${diff}`);
+    }
+    return out;
+  }, [base.toString('base64'), tagged]);
+  expect(results).toEqual([
+    'orientation 1: 60x40 diff 0', 'orientation 2: 60x40 diff 0', 'orientation 3: 60x40 diff 0',
+    'orientation 4: 60x40 diff 0', 'orientation 5: 40x60 diff 0', 'orientation 6: 40x60 diff 0',
+    'orientation 7: 40x60 diff 0', 'orientation 8: 40x60 diff 0',
+  ]);
+});
+
 test('keeps wide-gamut (Display P3) colours', async ({ page }) => {
   const p3 = await page.evaluate(() => {
     const ctx = document.createElement('canvas').getContext('2d', { colorSpace: 'display-p3' });

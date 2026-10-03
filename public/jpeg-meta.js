@@ -111,3 +111,24 @@ export function exifWithUprightOrientation(exif) {
   }
   return out;
 }
+
+/** The EXIF orientation (1–8; 1 = upright), or 1 when absent or unreadable. */
+export function exifOrientation(exif) {
+  if (!exif || exif.length < 8) return 1;
+  try {
+    const dv = new DataView(exif.buffer, exif.byteOffset, exif.byteLength);
+    const le = exif[0] === 0x49;
+    const ifd = dv.getUint32(4, le);
+    const n = dv.getUint16(ifd, le);
+    for (let i = 0; i < n; i++) {
+      const e = ifd + 2 + i * 12;
+      if (dv.getUint16(e, le) === 0x0112) {
+        const v = dv.getUint16(e + 8, le);
+        return v >= 1 && v <= 8 ? v : 1;
+      }
+    }
+  } catch {
+    // malformed EXIF
+  }
+  return 1;
+}
