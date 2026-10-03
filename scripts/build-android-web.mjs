@@ -43,6 +43,13 @@ await build({
   outfile: new URL('worker.js', out).pathname,
   external: ['./vendor/libheif/*'],
 });
+await build({
+  ...common,
+  entryPoints: [new URL('heic-worker.js', src).pathname],
+  format: 'iife',
+  outfile: new URL('heic-worker.js', out).pathname,
+  external: ['./vendor/libheif/*'],
+});
 
 copyFileSync(new URL('style.css', src), new URL('style.css', out));
 copyFileSync(new URL('vendor/libheif/libheif-bundle.js', src), new URL('vendor/libheif/libheif-bundle.js', out));

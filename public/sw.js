@@ -18,6 +18,7 @@ const ASSETS = [
   'jpeg-meta.js',
   'icc.js',
   'heic.js',
+  'heic-worker.js',
   'webp.js',
   'manifest.webmanifest',
   'icons/icon.svg',

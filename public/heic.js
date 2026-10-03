@@ -56,8 +56,44 @@ export async function decodeHeicNatively(blob) {
   }
 }
 
+const WORKER_TYPE = typeof __WORKER_TYPE__ !== 'undefined' ? __WORKER_TYPE__ : 'module';
+let helper;
+let nextJob = 0;
+const jobs = new Map();
+
+/** Decode HEIC in a helper worker (see heic-worker.js), or null if none can start. */
+function decodeInHelperWorker(bytes) {
+  if (!helper) {
+    try {
+      helper = new Worker(new URL('./heic-worker.js', import.meta.url), { type: WORKER_TYPE });
+    } catch {
+      return null;
+    }
+    helper.onmessage = ({ data }) => {
+      const job = jobs.get(data.id);
+      jobs.delete(data.id);
+      if (job) data.ok ? job.resolve(data) : job.reject(new Error(data.error));
+    };
+    helper.onerror = (e) => {
+      e.preventDefault();
+      for (const job of jobs.values()) job.reject(new Error('לא ניתן לפענח את קובץ ה-HEIC'));
+      jobs.clear();
+    };
+  }
+  const id = ++nextJob;
+  return new Promise((resolve, reject) => {
+    jobs.set(id, { resolve, reject });
+    helper.postMessage({ id, bytes });
+  });
+}
+
 /** Decode with libheif. Returns raw RGBA pixels in the image's own colour space. */
 export async function decodeHeicWasm(bytes) {
+  // On the main thread, hand the work to a worker (see heic-worker.js).
+  if (typeof document !== 'undefined' && typeof Worker !== 'undefined') {
+    const viaWorker = decodeInHelperWorker(bytes);
+    if (viaWorker) return viaWorker;
+  }
   const lib = await loadLibheif();
   const decoder = new lib.HeifDecoder();
   const images = decoder.decode(bytes);
