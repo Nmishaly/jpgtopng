@@ -99,6 +99,7 @@ jobs:
   android-test:
     needs: android-build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
