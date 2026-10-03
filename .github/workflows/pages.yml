@@ -102,7 +102,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api: [28, 34]
+        api: [28, 30, 34]  # 30 = Android 11, as on the Autel controller
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
