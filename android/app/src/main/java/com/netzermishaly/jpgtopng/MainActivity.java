@@ -271,7 +271,15 @@ public class MainActivity extends Activity {
                     }
                     File dir = new File(Environment.getExternalStoragePublicDirectory(base), SUBFOLDER);
                     if (!dir.isDirectory() && !dir.mkdirs()) {
-                        throw new IOException("Cannot create " + dir + " (storage " + state + ")");
+                        // The shared folder was refused (e.g. the permission was not applied
+                        // yet): save in the app's own folder, which needs no permission.
+                        Log.w(TAG, "Cannot create " + dir + "; using the app's own folder");
+                        File own = getExternalFilesDir(base);
+                        dir = own == null ? null : new File(own, SUBFOLDER);
+                        if (dir == null || (!dir.isDirectory() && !dir.mkdirs())) {
+                            throw new IOException("Cannot create a folder for saving (storage " + state + ")");
+                        }
+                        sink.folder = "Android/data/" + getPackageName() + "/files/" + base + "/" + SUBFOLDER;
                     }
                     sink.file = uniqueFile(dir, name);
                     sink.name = sink.file.getName();

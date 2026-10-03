@@ -84,6 +84,9 @@ const cdp = await (async () => {
     sh(`pm grant ${PKG} android.permission.WRITE_EXTERNAL_STORAGE`);
     const granted = sh(`dumpsys package ${PKG} | grep WRITE_EXTERNAL_STORAGE || true`).trim();
     log('storage permission:', granted.replace(/\s+/g, ' '));
+    // The new storage access applies to processes started after it settles.
+    sh(`am force-stop ${PKG}`);
+    await sleep(3000);
   }
   sh('rm -rf /sdcard/Pictures/JPGtoPNG /sdcard/Download/JPGtoPNG');
   log('starting the app');
@@ -204,7 +207,7 @@ await click('#file-list li .link');
 await waitFor(() => /נשמר במכשיר|נכשלה/.test(document.getElementById('message').textContent), null, 120_000);
 const saved = await text('#message');
 log('save message:', saved);
-const savedPath = saved.match(/Pictures\/JPGtoPNG\/[^\s]+\.png/);
+const savedPath = saved.match(/\S*Pictures\/JPGtoPNG\/\S+\.png/);
 if (!savedPath) fail(`unexpected save message: ${saved}`);
 const png = pull(`/sdcard/${savedPath[0]}`);
 if (png.subarray(1, 4).toString() !== 'PNG') fail('saved file is not a PNG');
@@ -232,7 +235,7 @@ await click('#download-zip');
 await waitFor(() => /\.zip|נכשלה/.test(document.getElementById('message').textContent), null, 120_000);
 const zipMessage = await text('#message');
 log('zip message:', zipMessage);
-const zipPath = zipMessage.match(/Download\/JPGtoPNG\/[^\s]+\.zip/);
+const zipPath = zipMessage.match(/\S*Download\/JPGtoPNG\/\S+\.zip/);
 if (!zipPath) fail(`unexpected zip message: ${zipMessage}`);
 const dir = mkdtempSync(join(tmpdir(), 'apk-zip-'));
 writeFileSync(join(dir, 'out.zip'), pull(`/sdcard/${zipPath[0]}`));
