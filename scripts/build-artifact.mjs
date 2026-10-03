@@ -24,7 +24,10 @@ writeFileSync(new URL('index.html', out), page);
 // worker and web-app manifest are left out: artifact pages cannot use them.
 const files = readdirSync(src).filter((f) => f.endsWith('.js') && f !== 'sw.js');
 mkdirSync(new URL('vendor/libheif/', out), { recursive: true });
-for (const f of readdirSync(new URL('vendor/libheif/', src))) files.push(`vendor/libheif/${f}`);
+for (const dir of ['libheif', 'fflate']) {
+  mkdirSync(new URL(`vendor/${dir}/`, out), { recursive: true });
+  for (const f of readdirSync(new URL(`vendor/${dir}/`, src))) files.push(`vendor/${dir}/${f}`);
+}
 for (const f of files) copyFileSync(new URL(f, src), new URL(f, out));
 writeFileSync(new URL('files.json', out), JSON.stringify(files, null, 2));
 console.log('Built', new URL('index.html', out).pathname);

@@ -1,10 +1,21 @@
 // HEIC/HEIF (iPhone photo format) decoding. Safari decodes HEIC natively;
 // elsewhere the libheif WebAssembly decoder is loaded on first use.
 
+// The Android app's build for older WebViews runs workers as classic scripts
+// (it defines __WORKER_TYPE__ = 'classic'); those load the classic-script
+// build of the decoder with importScripts instead of a dynamic import.
+const CLASSIC_WORKER = typeof __WORKER_TYPE__ !== 'undefined' && __WORKER_TYPE__ === 'classic'
+  && typeof importScripts === 'function';
+
 let libheif;
 async function loadLibheif() {
   if (!libheif) {
-    libheif = import('./vendor/libheif/libheif-bundle.mjs').then((m) => m.default());
+    libheif = CLASSIC_WORKER
+      ? Promise.resolve().then(() => {
+        importScripts(new URL('vendor/libheif/libheif-bundle.js', self.location.href).href);
+        return self.libheif();
+      })
+      : import('./vendor/libheif/libheif-bundle.mjs').then((m) => m.default());
   }
   return libheif;
 }

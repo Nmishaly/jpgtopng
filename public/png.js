@@ -1,8 +1,10 @@
 import { crc32 } from './zip.js';
 
 // Streaming PNG encoder. Rows are filtered (adaptive per-row filter choice,
-// as libpng does) and deflated with the browser's CompressionStream, one
-// strip at a time, so even very large images never need a full-size canvas.
+// as libpng does) and deflated one strip at a time, so even very large
+// images never need a full-size canvas. Compression uses the browser's
+// CompressionStream, or the bundled fflate library where it is missing
+// (Chrome/WebView before 80, Safari before 16.4).
 
 const SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const encoder = new TextEncoder();
@@ -17,9 +19,54 @@ function chunk(type, data) {
   return out;
 }
 
-async function deflate(bytes) {
+const hasCompressionStream = () => typeof CompressionStream !== 'undefined';
+let fflate;
+const loadFflate = () => (fflate ??= import('./vendor/fflate/fflate.mjs'));
+
+/** zlib-compress a small buffer in one go. */
+async function deflate(bytes, useFallback) {
+  if (useFallback || !hasCompressionStream()) return (await loadFflate()).zlibSync(bytes);
   const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/**
+ * A streaming zlib compressor: write() chunks, then close() resolves with the
+ * compressed output as a list of chunks.
+ */
+async function zlibSink(useFallback) {
+  if (useFallback || !hasCompressionStream()) {
+    const { Zlib } = await loadFflate();
+    const out = [];
+    const z = new Zlib({ level: 6 }, (data) => out.push(data));
+    return {
+      async write(bytes) { z.push(bytes); },
+      async close() { z.push(new Uint8Array(0), true); return out; },
+      abort() {},
+    };
+  }
+  const cs = new CompressionStream('deflate');
+  const writer = cs.writable.getWriter();
+  const collected = (async () => {
+    const reader = cs.readable.getReader();
+    const out = [];
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return out;
+      out.push(value);
+    }
+  })();
+  collected.catch(() => {});
+  return {
+    async write(bytes) {
+      // Don't wait for compression to finish this strip: filter the next one
+      // meanwhile. `ready` still applies backpressure; errors surface in close().
+      await writer.ready;
+      writer.write(bytes).catch(() => {});
+    },
+    async close() { await writer.close(); return collected; },
+    abort() { writer.abort().catch(() => {}); },
+  };
 }
 
 export class GrayMismatch extends Error {}
@@ -27,9 +74,10 @@ export class GrayMismatch extends Error {}
 export class PngEncoder {
   /**
    * @param {{width:number,height:number,gray?:boolean,icc?:{name:string,data:Uint8Array},
-   *          srgb?:boolean,exif?:Uint8Array,phys?:{x:number,y:number}}} opts
+   *          srgb?:boolean,exif?:Uint8Array,phys?:{x:number,y:number},
+   *          useFallbackDeflate?:boolean}} opts
    */
-  constructor({ width, height, gray = false, icc, srgb = false, exif, phys }) {
+  constructor({ width, height, gray = false, icc, srgb = false, exif, phys, useFallbackDeflate = false }) {
     this.width = width;
     this.height = height;
     this.bpp = gray ? 1 : 3;
@@ -37,19 +85,9 @@ export class PngEncoder {
     this.prev = new Uint8Array(this.rowLen);
     this.cur = new Uint8Array(this.rowLen);
     this.parts = [SIGNATURE];
+    this.useFallbackDeflate = useFallbackDeflate;
     this.headerReady = this.#header({ gray, icc, srgb, exif, phys });
-
-    const cs = new CompressionStream('deflate');
-    this.writer = cs.writable.getWriter();
-    this.idat = (async () => {
-      const reader = cs.readable.getReader();
-      const out = [];
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) return out;
-        out.push(chunk('IDAT', value));
-      }
-    })();
+    this.sink = zlibSink(useFallbackDeflate);
   }
 
   async #header({ gray, icc, srgb, exif, phys }) {
@@ -62,7 +100,7 @@ export class PngEncoder {
     const parts = [chunk('IHDR', ihdr)];
     if (icc) {
       const name = encoder.encode(icc.name.slice(0, 79));
-      const z = await deflate(icc.data);
+      const z = await deflate(icc.data, this.useFallbackDeflate);
       const data = new Uint8Array(name.length + 2 + z.length);
       data.set(name);
       data.set(z, name.length + 2); // null separator + compression method 0
@@ -106,10 +144,7 @@ export class PngEncoder {
       this.cur = this.prev;
       this.prev = cur;
     }
-    // Don't wait for compression to finish this strip: filter the next one
-    // meanwhile. `ready` still applies backpressure; errors surface in finish().
-    await this.writer.ready;
-    this.writer.write(out).catch(() => {});
+    await (await this.sink).write(out);
   }
 
   #filterRow(out, at) {
@@ -169,17 +204,15 @@ export class PngEncoder {
 
   /** Finish the stream. Returns the PNG as a Blob plus its CRC-32 (for ZIP). */
   async finish() {
-    await this.writer.close();
-    const parts = [...this.parts, ...(await this.headerReady), ...(await this.idat),
-      chunk('IEND', new Uint8Array(0))];
+    const idat = (await (await this.sink).close()).map((data) => chunk('IDAT', data));
+    const parts = [...this.parts, ...(await this.headerReady), ...idat, chunk('IEND', new Uint8Array(0))];
     let crc = 0;
     for (const p of parts) crc = crc32(p, crc);
     return { blob: new Blob(parts, { type: 'image/png' }), crc };
   }
 
   abort() {
-    this.idat.catch(() => {});
     this.headerReady.catch(() => {});
-    this.writer.abort().catch(() => {});
+    this.sink.then((sink) => sink.abort(), () => {});
   }
 }

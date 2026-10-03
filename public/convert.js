@@ -78,7 +78,7 @@ function makeCanvas(width, height) {
 }
 
 let p3Support;
-function supportsP3() {
+export function supportsP3() {
   if (p3Support === undefined) {
     try {
       // getContextAttributes() is missing on OffscreenCanvas in some browsers,

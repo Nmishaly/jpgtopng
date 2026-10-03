@@ -1,3 +1,4 @@
+import './compat.js';
 import { convertImage } from './convert.js';
 
 self.onmessage = async ({ data: { id, file, options } }) => {

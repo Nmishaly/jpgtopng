@@ -57,6 +57,13 @@ function randomRgba(w, h, gray = false) {
 }
 
 async function roundTrip({ w, h, gray, strip, ...opts }) {
+  for (const useFallbackDeflate of [false, true]) {
+    await roundTripWith({ w, h, gray, strip, useFallbackDeflate, ...opts });
+  }
+  return roundTripWith({ w, h, gray, strip, ...opts });
+}
+
+async function roundTripWith({ w, h, gray, strip, ...opts }) {
   const rgba = randomRgba(w, h, gray);
   const enc = new PngEncoder({ width: w, height: h, gray, ...opts });
   for (let y = 0; y < h; y += strip) {

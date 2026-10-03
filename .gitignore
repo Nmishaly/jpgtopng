@@ -3,3 +3,9 @@ dist/
 e2e/fixtures/
 test-results/
 playwright-report/
+android/app/src/main/assets/www/
+android/.gradle/
+android/**/build/
+android/local.properties
+*.jks
+android-screenshot.png

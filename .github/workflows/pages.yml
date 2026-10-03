@@ -47,9 +47,103 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  android-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Package the site for the app
+        run: node scripts/build-android-web.mjs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Release signing key (from repository secrets)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; the APK is signed with a temporary key, so updates need an uninstall first."
+          fi
+      - name: Build APKs
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          gradle -p android --no-daemon assembleRelease assembleDebug
+          mkdir -p apk
+          cp android/app/build/outputs/apk/release/app-release.apk apk/JPGtoPNG.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk apk/JPGtoPNG-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: apk/JPGtoPNG.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-debug
+          path: apk/JPGtoPNG-debug.apk
+
+  android-test:
+    needs: android-build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [28, 34]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apk-debug
+      - name: Download HEIC test image (from the libheif project)
+        run: |
+          mkdir -p e2e/fixtures
+          curl -fsSL -o e2e/fixtures/example.heic \
+            https://raw.githubusercontent.com/strukturag/libheif/master/examples/example.heic
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test on Android API ${{ matrix.api }} (factory WebView)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 4096
+          script: |
+            adb install -r JPGtoPNG-debug.apk
+            node android/emulator-check.mjs || (adb logcat -d -s JpgToPng chromium AndroidRuntime | tail -200; exit 1)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-screenshot-api${{ matrix.api }}
+          path: android-screenshot.png
+          if-no-files-found: ignore
+
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: [unit, e2e]
+    needs: [unit, e2e, android-test]
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -62,6 +156,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: public/download
       - name: Stamp the offline cache with this commit
         run: sed -i "s/const VERSION = 'dev'/const VERSION = '${GITHUB_SHA::12}'/" public/sw.js
       - uses: actions/configure-pages@v5

@@ -1,0 +1,52 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Release signing comes from CI secrets (see README). Without them the
+// release build is signed with the debug key, which works for installing
+// but means a later update must be installed after uninstalling.
+def keystoreFile = System.getenv('ANDROID_KEYSTORE_FILE')
+
+android {
+    namespace 'com.netzermishaly.jpgtopng'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.netzermishaly.jpgtopng'
+        minSdk 24
+        targetSdk 34
+        versionCode((System.getenv('VERSION_CODE') ?: '1') as int)
+        versionName System.getenv('VERSION_NAME') ?: '1.0-dev'
+    }
+
+    signingConfigs {
+        release {
+            if (keystoreFile) {
+                storeFile file(keystoreFile)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystoreFile ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+}

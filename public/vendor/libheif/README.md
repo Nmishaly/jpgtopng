@@ -1,6 +1,8 @@
 # libheif (vendored)
 
-`libheif-bundle.mjs` is the unmodified `libheif-wasm/libheif-bundle.mjs` file from
+`libheif-bundle.mjs` and `libheif-bundle.js` are the unmodified
+`libheif-wasm/libheif-bundle.mjs` (ES module) and `libheif-wasm/libheif-bundle.js`
+(classic script, used by the Android app on older WebViews) files from
 [libheif-js](https://github.com/catdad-experiments/libheif-js) **1.19.8**
 (npm: `libheif-js@1.19.8`), an Emscripten build of
 [libheif](https://github.com/strukturag/libheif).

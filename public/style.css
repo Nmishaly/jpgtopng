@@ -158,3 +158,13 @@ button.remove:hover { color: var(--err); }
 .platforms section.current { border-color: var(--accent); background: var(--accent-soft); }
 .installed-note { color: var(--ok); }
 #install { margin-top: 4px; }
+
+.diagnostics { margin-top: 16px; }
+.diagnostics summary { cursor: pointer; }
+.diagnostics dl {
+  display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 8px 0 0;
+}
+.diagnostics dt { color: var(--muted); }
+.diagnostics dd { margin: 0; overflow-wrap: anywhere; }
+.platforms section p.apk { margin-top: 8px; }
+.apk a { color: var(--accent); font-weight: 600; }

@@ -9,6 +9,8 @@ const ASSETS = [
   'index.html',
   'style.css',
   'app.js',
+  'compat.js',
+  'vendor/fflate/fflate.mjs',
   'convert.js',
   'worker.js',
   'zip.js',

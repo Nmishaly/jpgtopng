@@ -1,6 +1,13 @@
-import { convertImage } from './convert.js';
+import './compat.js';
+import { convertImage, supportsP3 } from './convert.js';
 import { buildZipParts } from './zip.js';
 import { webpLosslessSupported } from './webp.js';
+
+// Inside the Android app, a native bridge saves files on the device.
+const androidBridge = window.AndroidBridge;
+// Workers are ES modules, except in the Android app's build for older
+// WebViews, which bundles them as classic scripts.
+const WORKER_TYPE = typeof __WORKER_TYPE__ !== 'undefined' ? __WORKER_TYPE__ : 'module';
 
 const MAX_FILES = 300;
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -61,7 +68,7 @@ function workerSupported() {
 if (workerSupported()) {
   try {
     workers = Array.from({ length: poolSize }, () => {
-      const w = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+      const w = new Worker(new URL('./worker.js', import.meta.url), { type: WORKER_TYPE });
       w.onmessage = ({ data }) => {
         const p = pending.get(data.id);
         pending.delete(data.id);
@@ -289,21 +296,28 @@ function update() {
 
   zipButton.disabled = done.length === 0 || busy || !!folderHandle;
   stopButton.hidden = !busy;
-  saveFolderButton.hidden = !('showDirectoryPicker' in window) || !!folderHandle;
+  saveFolderButton.hidden = !canSaveToFolder || !!folderHandle;
+  if (androidBridge && busy !== keepingScreenOn) {
+    keepingScreenOn = busy;
+    androidBridge.setKeepScreenOn(busy); // don't let the screen sleep mid-batch
+  }
 
   const inMemory = done.filter((i) => i.blob).reduce((n, i) => n + i.blob.size, 0);
   if (inMemory > MEMORY_WARNING_BYTES && !folderHandle && !memoryWarned) {
     memoryWarned = true;
     showMessage(
       'נצברו בזיכרון יותר מ-1.5GB של קבצים מומרים, והדפדפן עלול להאט או להיסגר. ' +
-        ('showDirectoryPicker' in window
-          ? 'מומלץ ללחוץ על "שמירה ישירה לתיקייה".'
+        (canSaveToFolder
+          ? `מומלץ ללחוץ על "${saveFolderButton.textContent}".`
           : 'מומלץ להוריד את הקבצים כ-ZIP, ללחוץ על "ניקוי" ולהמשיך בקבוצה הבאה.'),
       { sticky: true },
     );
   }
 }
 let memoryWarned = false;
+let keepingScreenOn = false;
+const canSaveToFolder = 'showDirectoryPicker' in window || !!androidBridge;
+if (androidBridge) saveFolderButton.textContent = 'שמירה אוטומטית למכשיר';
 
 // ---------- Saving ----------
 
@@ -319,6 +333,17 @@ zipButton.addEventListener('click', () => {
 // file is written to disk and dropped from memory, so batch size is limited
 // only by disk space.
 saveFolderButton.addEventListener('click', async () => {
+  if (androidBridge) {
+    folderHandle = { android: true };
+    folderText.hidden = false;
+    folderText.textContent = 'כל קובץ מומר נשמר אוטומטית במכשיר, בתיקייה Pictures/JPGtoPNG.';
+    messageBox.hidden = true;
+    for (const item of items.values()) {
+      if (item.status === 'done' && item.blob) await writeToFolder(item);
+    }
+    update();
+    return;
+  }
   try {
     folderHandle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'jpgtopng' });
   } catch (err) {
@@ -337,6 +362,18 @@ saveFolderButton.addEventListener('click', async () => {
 });
 
 async function writeToFolder(item) {
+  if (folderHandle.android) {
+    try {
+      await saveViaAndroid(item.blob, item.outName);
+      item.blob = undefined; // free the memory; the file is on the device now
+      item.savedToFolder = true;
+      item.actions.querySelector('.link')?.remove();
+      setStatus(item, 'done', 'נשמר במכשיר');
+    } catch (err) {
+      showMessage(`שמירת ${item.outName} נכשלה: ${err.message}`);
+    }
+    return;
+  }
   let name = item.outName;
   // Never overwrite a file that is already in the folder.
   for (let i = 1; await fileExists(folderHandle, name); i++) {
@@ -372,8 +409,45 @@ const downloadsReady = window.claude?.use
   ? window.claude.use('downloads').catch(() => null)
   : Promise.resolve(null);
 
+/** Stream a Blob to the Android app, which writes it to Pictures or Download. */
+async function saveViaAndroid(blob, filename) {
+  const mime = filename.endsWith('.zip') ? 'application/zip'
+    : filename.endsWith('.webp') ? 'image/webp' : 'image/png';
+  const id = androidBridge.begin(filename, mime);
+  if (!id) throw new Error(androidBridge.lastError() || 'אין אפשרות ליצור את הקובץ');
+  try {
+    const CHUNK = 1024 * 1024;
+    for (let offset = 0; offset < blob.size; offset += CHUNK) {
+      const bytes = new Uint8Array(await blob.slice(offset, offset + CHUNK).arrayBuffer());
+      if (!androidBridge.append(id, toBase64(bytes))) throw new Error(androidBridge.lastError());
+    }
+    const path = androidBridge.finish(id);
+    if (!path) throw new Error(androidBridge.lastError());
+    return path;
+  } catch (err) {
+    androidBridge.abort(id);
+    throw err;
+  }
+}
+
+function toBase64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(s);
+}
+
 async function saveFile(blob, filename) {
   if (!blob) return;
+  if (androidBridge) {
+    try {
+      showMessage(`נשמר במכשיר: ${await saveViaAndroid(blob, filename)}`);
+    } catch (err) {
+      showMessage(`השמירה נכשלה: ${err.message}`, { sticky: true });
+    }
+    return;
+  }
   const downloads = await downloadsReady;
   if (!downloads) {
     linkDownload(blob, filename);
@@ -516,7 +590,8 @@ update();
 // Not inside claude.ai, where service workers are unavailable.
 
 const offlineStatus = $('offline-status');
-const offlineCapable = 'serviceWorker' in navigator && !window.claude && window.isSecureContext;
+// The Android app has everything built in, so it needs no offline cache.
+const offlineCapable = 'serviceWorker' in navigator && !window.claude && !androidBridge && window.isSecureContext;
 let offlineReady = false;
 
 function showOfflineStatus() {
@@ -581,3 +656,38 @@ if (offlineCapable) {
     $('installed-note').hidden = false;
   });
 }
+
+// ---------- Technical info (helps diagnose older devices) ----------
+
+async function renderDiagnostics() {
+  const rows = [];
+  if (androidBridge) {
+    try {
+      const info = JSON.parse(androidBridge.info());
+      rows.push(['גרסת האפליקציה', info.app], ['אנדרואיד', `${info.android} (API ${info.sdk})`],
+        ['מכשיר', info.device], ['רכיב WebView', info.webview]);
+    } catch {
+      // older app build without info(): skip
+    }
+  }
+  const engine = navigator.userAgent.match(/(Chrome|Firefox|Version)\/[\d.]+/);
+  rows.push(['מנוע הדפדפן', engine ? engine[0].replace('Version', 'Safari') : navigator.userAgent]);
+  const yes = (ok, no = 'לא נתמך') => (ok ? '✓' : no);
+  rows.push(
+    ['עיבוד ברקע במקביל', yes(workers.length > 0, 'לא – ההמרה תהיה איטית יותר')],
+    ['דחיסה מובנית', yes(typeof CompressionStream !== 'undefined', 'לא – משתמש בספרייה חלופית')],
+    ['צבע רחב (P3)', yes(supportsP3(), 'לא – צבעים יומרו ל-sRGB')],
+    ['WebP ללא אובדן', yes(await webpLosslessSupported())],
+  );
+  const list = $('diagnostics-list');
+  list.replaceChildren(...rows.flatMap(([k, v]) => {
+    const dt = document.createElement('dt');
+    dt.textContent = k;
+    const dd = document.createElement('dd');
+    dd.textContent = v;
+    return [dt, dd];
+  }));
+}
+$('diagnostics').addEventListener('toggle', (e) => {
+  if (e.target.open) renderDiagnostics();
+});
