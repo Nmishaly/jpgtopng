@@ -1,0 +1,14 @@
+{
+  "name": "jpgtopng",
+  "version": "1.0.0",
+  "description": "Batch JPG to PNG converter that runs entirely in the browser",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

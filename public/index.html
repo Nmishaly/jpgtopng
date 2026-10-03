@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- connect-src 'none': the page is technically unable to send data anywhere. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' blob: data:; worker-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>המרת JPG ל-PNG</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>המרת JPG ל-PNG</h1>
+      <p class="lead">
+        המירו עד מאות תמונות בבת אחת, ללא אובדן איכות.
+        <strong>הקבצים לא נשלחים לשום שרת</strong> – כל ההמרה מתבצעת בדפדפן שלכם.
+      </p>
+    </header>
+
+    <label id="dropzone" class="dropzone" tabindex="0">
+      <input id="file-input" type="file" accept=".jpg,.jpeg,.jfif,image/jpeg" multiple hidden>
+      <span class="dz-icon" aria-hidden="true">⬆</span>
+      <span class="dz-title">גררו לכאן קבצי JPG או לחצו לבחירה</span>
+      <span class="dz-hint" id="limits-hint"></span>
+    </label>
+
+    <section id="summary" class="summary" hidden>
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <p id="status-text" aria-live="polite"></p>
+      <div class="actions">
+        <button id="download-zip" class="primary" disabled>הורדת הכל כ-ZIP</button>
+        <button id="clear" class="secondary">ניקוי</button>
+      </div>
+    </section>
+
+    <ul id="file-list" class="file-list"></ul>
+
+    <footer>
+      PNG הוא פורמט ללא דחיסה מאבדת – כל פיקסל של התמונה המקורית נשמר כפי שהוא.
+      הקבצים נשמרים רק בזיכרון הדפדפן ונמחקים בעת ניקוי או סגירת הדף.
+    </footer>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
