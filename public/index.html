@@ -23,6 +23,7 @@
         המירו עד מאות תמונות בבת אחת, ללא אובדן איכות.
         <strong>הקבצים לא נשלחים לשום שרת</strong> – כל ההמרה מתבצעת בדפדפן שלכם, וגם עובדת בלי חיבור לאינטרנט.
       </p>
+      <p id="offline-status" class="offline-status" role="status" hidden></p>
     </header>
 
     <section class="options" aria-label="אפשרויות">
@@ -69,6 +70,47 @@
     <p id="message" class="message" role="alert" hidden></p>
 
     <ul id="file-list" class="file-list"></ul>
+
+    <section id="offline-help" class="help" hidden>
+      <details id="offline-details">
+        <summary>עבודה ללא אינטרנט והתקנה כאפליקציה</summary>
+        <p>
+          אחרי הביקור הראשון האתר נשמר במכשיר, וממשיך לעבוד גם בלי חיבור – במטוס, בשטח או ברשת חסומה.
+          ההמרה ממילא מתבצעת במכשיר שלכם, כך שאין שום הבדל באיכות או במהירות.
+        </p>
+        <ol class="steps">
+          <li>פתחו את האתר פעם אחת כשיש אינטרנט, וחכו שלמעלה יופיע <strong>"מוכן לעבודה ללא אינטרנט"</strong>.</li>
+          <li>התקינו את האתר כאפליקציה (הוראות למטה), כדי לפתוח אותו מסמל במסך הבית גם בלי חיבור.</li>
+          <li>בלי אינטרנט: פתחו את האפליקציה, או את אותה כתובת באותו דפדפן, והמירו כרגיל.</li>
+        </ol>
+        <button id="install" class="primary" type="button" hidden>התקנה כאפליקציה</button>
+        <p id="installed-note" class="installed-note" hidden>האפליקציה מותקנת במכשיר הזה.</p>
+
+        <div id="install-guides" class="platforms">
+          <section data-platform="ios">
+            <h3>אייפון ואייפד</h3>
+            <p>פתחו את האתר ב-<strong>Safari</strong> ← כפתור השיתוף (ריבוע עם חץ למעלה) ← <strong>"הוספה למסך הבית"</strong> ← <strong>"הוסף"</strong>.</p>
+          </section>
+          <section data-platform="android">
+            <h3>אנדרואיד</h3>
+            <p>ב-<strong>Chrome</strong>: תפריט ⋮ ← <strong>"התקנת האפליקציה"</strong> (או "הוספה למסך הבית").</p>
+          </section>
+          <section data-platform="desktop">
+            <h3>מחשב</h3>
+            <p>ב-<strong>Chrome</strong> או <strong>Edge</strong>: סמל ההתקנה בקצה שורת הכתובת ← <strong>"התקנה"</strong>.
+              ב-Firefox אין התקנה כאפליקציה, אבל האתר עובד בלי אינטרנט גם בלשונית רגילה.</p>
+          </section>
+        </div>
+
+        <h3>טוב לדעת</h3>
+        <ul class="notes">
+          <li>עדכונים לאתר מגיעים אוטומטית בפעם הבאה שפותחים אותו עם חיבור.</li>
+          <li>ניקוי נתוני הגלישה או "נתוני האתר" בדפדפן מוחק את העותק השמור; פתחו את האתר שוב פעם אחת עם אינטרנט.</li>
+          <li>העותק השמור שייך לדפדפן שבו פתחתם את האתר. באייפון, אתר שלא נפתח זמן רב עלול להימחק, אבל אפליקציה מותקנת נשמרת.</li>
+          <li>בגלישה בסתר (Incognito) העותק לא נשמר אחרי סגירת החלון.</li>
+        </ul>
+      </details>
+    </section>
 
     <footer>
       PNG הוא פורמט ללא דחיסה מאבדת – כל פיקסל של התמונה המקורית נשמר כפי שהוא, כולל צבעים רחבים
