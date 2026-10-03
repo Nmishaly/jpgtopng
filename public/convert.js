@@ -155,8 +155,34 @@ async function encodeWebp(src) {
     ? await canvas.convertToBlob({ type: 'image/webp', quality: 1 })
     : await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 1));
   if (!blob || blob.type !== 'image/webp') throw new Error('הדפדפן לא תומך בשמירה כ-WebP');
+  await verifyLossless(ctx, blob, width, height, colorSpace);
   const crc = crc32(new Uint8Array(await blob.arrayBuffer()));
   return { blob, crc, width, height, extension: 'webp' };
+}
+
+/**
+ * Decode the encoded WebP and compare it with the source pixels: the
+ * browser's encoder is not guaranteed to be lossless, so never hand out a
+ * file that differs from the original.
+ */
+async function verifyLossless(ctx, blob, width, height, colorSpace) {
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const check = makeCanvas(width, height).getContext('2d', { colorSpace, willReadFrequently: true });
+    const stripRows = Math.max(1, Math.min(height, Math.floor(STRIP_PIXELS / width)));
+    for (let y = 0; y < height; y += stripRows) {
+      const rows = Math.min(stripRows, height - y);
+      check.clearRect(0, 0, width, rows);
+      check.drawImage(bitmap, 0, y, width, rows, 0, 0, width, rows);
+      const a = ctx.getImageData(0, y, width, rows, { colorSpace }).data;
+      const b = check.getImageData(0, 0, width, rows, { colorSpace }).data;
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) throw new Error('הדפדפן לא שמר את ה-WebP ללא אובדן; בחרו PNG');
+      }
+    }
+  } finally {
+    bitmap.close();
+  }
 }
 
 async function thumbnail(src) {

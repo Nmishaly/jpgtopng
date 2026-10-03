@@ -90,13 +90,18 @@ test('converts HEIC photos', async ({ page }) => {
   expect(bytes.subarray(1, 4).toString()).toBe('PNG');
 });
 
-test('lossless WebP output, when offered, is pixel-exact', async ({ page }) => {
+test('WebP output is never lossy: pixel-exact or refused', async ({ page }) => {
   await page.waitForTimeout(500); // let the WebP capability check finish
   test.skip(!(await page.isVisible('#format-field')), 'no lossless WebP encoder in this browser');
   await page.selectOption('#format', 'webp');
   const jpeg = await makeJpeg(page, 500, 300, { seed: 9 });
   await page.setInputFiles('#file-input', [{ name: 'w.jpg', mimeType: 'image/jpeg', buffer: jpeg }]);
   await waitForIdle(page);
+  if (await page.locator('li.error').count()) {
+    // The browser's encoder was lossy for this image: the file must be refused.
+    await expect(page.locator('li .state')).toContainText('בחרו PNG');
+    return;
+  }
   const { name, bytes } = await downloadItem(page);
   expect(name).toBe('w.webp');
   expect(bytes.subarray(8, 12).toString()).toBe('WEBP');
