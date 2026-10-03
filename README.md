@@ -8,11 +8,18 @@
 - **שמירה על איכות** – כל JPG מפוענח פעם אחת ונכתב ל-PNG, שהוא פורמט ללא אובדן. הפיקסלים בקובץ ה-PNG זהים לפיקסלים של ה-JPG המפוענח (נבדק בבדיקת קצה לקצה: הפרש 0). כיוון התמונה לפי EXIF נשמר.
 - **מספר קבצים גדול** – ההמרה רצה במקביל ב-Web Workers (עד 4), והזיכרון נשמר ע"י בניית ה-ZIP מהפניות ל-Blob ללא העתקה. מגבלות ברירת מחדל: 300 קבצים, 50MB לקובץ (ניתן לשנות ב-`public/app.js`).
 
+## קישור לשיתוף
+
+האתר מפורסם ב: https://claude.ai/artifact/XxQLG8hqQPRcPJfCUUp3kA
+
+כדי לשתף אותו עם אחרים, פתחו את הקישור והשתמשו בתפריט **Share** של הדף. לעדכון הדף אחרי שינוי בקוד מריצים `npm run build:artifact` ומפרסמים מחדש את התיקייה `dist/artifact/`.
+
 ## הרצה
 
 ```bash
 npm start          # http://localhost:3000  (PORT=8080 npm start לפורט אחר)
 npm test           # בדיקות יחידה ל-ZIP/CRC32
+npm run build:artifact   # בניית גרסת הקישור המשותף ל-dist/artifact/
 ```
 
 אין תלויות חיצוניות. אפשר גם לפרוס את תיקיית `public/` כאתר סטטי (GitHub Pages, Netlify, S3 וכו').
@@ -26,4 +33,5 @@ npm test           # בדיקות יחידה ל-ZIP/CRC32
 | `public/convert.js` | המרת JPG → PNG (`createImageBitmap` + Canvas) |
 | `public/worker.js` | הרצת ההמרה ב-Web Worker |
 | `public/zip.js` | יצירת ZIP (שיטת STORE, שמות קבצים ב-UTF-8) ו-CRC32 |
+| `scripts/build-artifact.mjs` | בניית גרסת הקישור המשותף (claude.ai) מאותם קבצים |
 | `server.js` | שרת סטטי מינימלי עם כותרות אבטחה, ללא נקודת העלאה |

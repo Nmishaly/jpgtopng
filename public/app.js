@@ -15,11 +15,12 @@ const progress = progressBar.parentElement;
 const statusText = $('status-text');
 const zipButton = $('download-zip');
 const clearButton = $('clear');
+const messageBox = $('message');
 
 $('limits-hint').textContent =
   `עד ${MAX_FILES} קבצים, עד ${MAX_FILE_SIZE / 1024 / 1024}MB לקובץ`;
 
-/** @type {Map<number, {id:number,file:File,outName:string,status:string,blob?:Blob,crc?:number,url?:string,li:HTMLLIElement}>} */
+/** @type {Map<number, {id:number,file:File,outName:string,status:string,blob?:Blob,crc?:number,li:HTMLLIElement}>} */
 const items = new Map();
 const queue = [];
 const usedNames = new Set();
@@ -119,14 +120,14 @@ function pump() {
         if (!items.has(item.id)) return;
         item.blob = res.blob;
         item.crc = res.crc;
-        item.url = URL.createObjectURL(res.blob);
         item.meta.textContent = `${res.width}×${res.height} · ${formatSize(res.blob.size)}`;
         setStatus(item, 'done', 'הושלם');
-        const a = document.createElement('a');
-        a.href = item.url;
-        a.download = item.outName;
-        a.textContent = 'הורדה';
-        item.li.append(a);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'link';
+        btn.textContent = 'הורדה';
+        btn.addEventListener('click', () => saveFile(item.blob, item.outName));
+        item.li.append(btn);
         update();
       },
       (err) => {
@@ -164,7 +165,7 @@ function addFiles(fileArray) {
     else if (file.size > MAX_FILE_SIZE) setStatus(item, 'error', 'הקובץ גדול מדי');
     else queue.push(item);
   }
-  if (rejected) alert(`ניתן להמיר עד ${MAX_FILES} קבצים בכל פעם. ${rejected} קבצים לא נוספו.`);
+  if (rejected) showMessage(`ניתן להמיר עד ${MAX_FILES} קבצים בכל פעם. ${rejected} קבצים לא נוספו.`);
   pump();
 }
 
@@ -214,15 +215,39 @@ zipButton.addEventListener('click', () => {
   const entries = [...items.values()]
     .filter((i) => i.status === 'done')
     .map((i) => ({ name: i.outName, data: i.blob, size: i.blob.size, crc: i.crc }));
+  let zip;
   try {
-    const zip = new Blob(buildZipParts(entries), { type: 'application/zip' });
-    triggerDownload(zip, 'converted-png.zip');
+    zip = new Blob(buildZipParts(entries), { type: 'application/zip' });
   } catch (err) {
-    alert(err.message);
+    showMessage(err.message);
+    return;
   }
+  saveFile(zip, 'converted-png.zip');
 });
 
-function triggerDownload(blob, filename) {
+// When the page runs inside a claude.ai artifact, plain download links are
+// blocked by the sandbox; the platform's `downloads` capability is used
+// instead. Anywhere else (self-hosted), a regular <a download> is used.
+const downloadsReady = window.claude?.use
+  ? window.claude.use('downloads').catch(() => null)
+  : Promise.resolve(null);
+
+async function saveFile(blob, filename) {
+  const downloads = await downloadsReady;
+  if (!downloads) {
+    linkDownload(blob, filename);
+    return;
+  }
+  try {
+    await downloads.save({ filename, data: blob });
+  } catch (err) {
+    if (err?.code === 'declined') return;
+    if (err?.code === 'rate_limited') showMessage('חלון הורדה כבר פתוח. אשרו או סגרו אותו ונסו שוב.');
+    else showMessage('ההורדה נכשלה. נסו שוב.');
+  }
+}
+
+function linkDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -233,13 +258,21 @@ function triggerDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+let messageTimer;
+function showMessage(text) {
+  messageBox.textContent = text;
+  messageBox.hidden = false;
+  clearTimeout(messageTimer);
+  messageTimer = setTimeout(() => (messageBox.hidden = true), 8000);
+}
+
 clearButton.addEventListener('click', () => {
-  for (const item of items.values()) if (item.url) URL.revokeObjectURL(item.url);
   items.clear();
   queue.length = 0;
   usedNames.clear();
   fileList.replaceChildren();
   fileInput.value = '';
+  messageBox.hidden = true;
   update();
 });
 
