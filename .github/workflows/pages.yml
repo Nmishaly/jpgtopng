@@ -2,7 +2,6 @@ name: Test and deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, ccr-5fa1ed7d-u762ln]
   pull_request:
   workflow_dispatch:
 
@@ -49,7 +48,7 @@ jobs:
           retention-days: 7
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: [unit, e2e]
     runs-on: ubuntu-latest
     permissions:

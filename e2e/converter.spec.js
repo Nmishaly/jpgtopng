@@ -162,15 +162,38 @@ test.describe('interface', () => {
     await expect(page.locator('li .name bdi')).toHaveText(/^pasted-.*\.jpg$/);
   });
 
-  test('works offline once loaded', async ({ page, context }) => {
-    await page.evaluate(() => navigator.serviceWorker.ready);
+  test('works offline once loaded, and says so', async ({ page, context }) => {
+    await expect(page.locator('#offline-status')).toHaveText('מוכן לעבודה ללא אינטרנט');
     await page.reload();
     await context.setOffline(true);
+    await expect(page.locator('#offline-status')).toContainText('אין חיבור לאינטרנט');
     await page.reload();
     await expect(page.locator('#dropzone')).toBeVisible();
+    await expect(page.locator('#offline-status')).toContainText('אין חיבור לאינטרנט');
     await page.setInputFiles('#file-input', [{ name: 'o.jpg', mimeType: 'image/jpeg', buffer: await makeJpeg(page, 100, 100) }]);
     await waitForIdle(page);
     await expect(page.locator('li .state')).toHaveText('הושלם');
+  });
+
+  test('offline guide lists the visitor\'s own device first', async ({ page }) => {
+    await expect(page.locator('#offline-help')).toBeVisible();
+    await page.click('#offline-details summary');
+    const first = page.locator('#install-guides section').first();
+    await expect(first).toHaveAttribute('data-platform', 'desktop');
+    await expect(first).toHaveClass(/current/);
+  });
+
+  test('offline guide highlights iPhone instructions on an iPhone', async ({ browser }) => {
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+      viewport: { width: 390, height: 844 },
+    });
+    const page = await context.newPage();
+    await page.goto('/');
+    await page.click('#offline-details summary');
+    await expect(page.locator('#install-guides section').first()).toHaveAttribute('data-platform', 'ios');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await context.close();
   });
 
   test('shows the author credit and fits a phone screen', async ({ page }) => {

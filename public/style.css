@@ -131,3 +131,30 @@ button.remove:hover { color: var(--err); }
   /* Status gets its own line under the file name so neither is squeezed. */
   .file-list .state { order: 4; flex-basis: 100%; padding-inline-start: 60px; white-space: normal; }
 }
+
+.offline-status {
+  display: inline-flex; align-items: center; gap: 6px; margin: -12px 0 20px;
+  padding: 4px 12px; border-radius: 99px; font-size: .85rem;
+  background: var(--accent-soft); color: var(--muted);
+}
+.offline-status.ready { color: var(--ok); }
+.offline-status.ready::before { content: "✓"; }
+.offline-status.offline { color: var(--text); border: 1px solid var(--border); }
+
+.help {
+  margin-top: 24px; padding: 4px 16px; background: var(--card);
+  border: 1px solid var(--border); border-radius: 14px;
+}
+.help summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+.help summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.help details[open] { padding-bottom: 12px; }
+.help p, .help li { max-width: 65ch; }
+.help h3 { margin: 16px 0 6px; font-size: 1rem; }
+.steps, .notes { margin: 8px 0; padding-inline-start: 22px; display: grid; gap: 6px; }
+.platforms { display: grid; gap: 8px; margin-top: 12px; }
+.platforms section { padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; }
+.platforms section h3 { margin-top: 0; }
+.platforms section p { margin: 0; }
+.platforms section.current { border-color: var(--accent); background: var(--accent-soft); }
+.installed-note { color: var(--ok); }
+#install { margin-top: 4px; }

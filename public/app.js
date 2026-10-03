@@ -511,7 +511,72 @@ webpLosslessSupported().then((ok) => {
 
 update();
 
-// Offline support (not inside claude.ai, where service workers are unavailable).
-if ('serviceWorker' in navigator && !window.claude && window.isSecureContext) {
+// ---------- Offline support and installation ----------
+// Not inside claude.ai, where service workers are unavailable.
+
+const offlineStatus = $('offline-status');
+const offlineCapable = 'serviceWorker' in navigator && !window.claude && window.isSecureContext;
+let offlineReady = false;
+
+function showOfflineStatus() {
+  if (!offlineCapable) return;
+  offlineStatus.hidden = false;
+  if (!navigator.onLine) {
+    offlineStatus.className = 'offline-status offline';
+    offlineStatus.textContent = 'אין חיבור לאינטרנט – ההמרה ממשיכה לעבוד כרגיל.';
+  } else if (offlineReady) {
+    offlineStatus.className = 'offline-status ready';
+    offlineStatus.textContent = 'מוכן לעבודה ללא אינטרנט';
+  } else {
+    offlineStatus.className = 'offline-status';
+    offlineStatus.textContent = 'מכין את האתר לעבודה ללא אינטרנט…';
+  }
+}
+
+if (offlineCapable) {
+  $('offline-help').hidden = false;
   navigator.serviceWorker.register('sw.js').catch(() => {});
+  // `ready` resolves once the worker is active, i.e. after all files were cached.
+  navigator.serviceWorker.ready.then(() => {
+    offlineReady = true;
+    showOfflineStatus();
+  });
+  window.addEventListener('online', showOfflineStatus);
+  window.addEventListener('offline', showOfflineStatus);
+  showOfflineStatus();
+
+  // Highlight the visitor's own device and list it first.
+  const ua = navigator.userAgent;
+  const platform = /iPad|iPhone|iPod/.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1)
+    ? 'ios'
+    : /Android/.test(ua) ? 'android' : 'desktop';
+  const own = document.querySelector(`#install-guides [data-platform="${platform}"]`);
+  own.classList.add('current');
+  own.parentElement.prepend(own);
+
+  const installed = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (installed) {
+    $('install-guides').hidden = true;
+    $('installed-note').hidden = false;
+  }
+
+  // Chrome and Edge offer a direct install prompt.
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installPrompt = e;
+    $('install').hidden = false;
+  });
+  $('install').addEventListener('click', async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => null);
+    installPrompt = null;
+    $('install').hidden = true;
+  });
+  window.addEventListener('appinstalled', () => {
+    $('install').hidden = true;
+    $('install-guides').hidden = true;
+    $('installed-note').hidden = false;
+  });
 }
