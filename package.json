@@ -7,9 +7,13 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
-    "build:artifact": "node scripts/build-artifact.mjs"
+    "build:artifact": "node scripts/build-artifact.mjs",
+    "test:e2e": "playwright test"
   },
   "engines": {
     "node": ">=18"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
   }
 }

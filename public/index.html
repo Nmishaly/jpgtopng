@@ -3,10 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- connect-src 'none': the page is technically unable to send data anywhere. -->
+  <!-- connect-src 'none': the page is technically unable to send data anywhere.
+       'wasm-unsafe-eval' allows the HEIC decoder (WebAssembly) to run. -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; img-src 'self' blob: data:; worker-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+        content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; img-src 'self' blob: data:; worker-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>המרת JPG ל-PNG</title>
+  <meta name="description" content="המרת תמונות JPG ל-PNG בכמויות, ללא אובדן איכות וללא העלאה לשרת.">
+  <meta name="theme-color" content="#2f6fed">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,26 +21,49 @@
       <h1>המרת JPG ל-PNG</h1>
       <p class="lead">
         המירו עד מאות תמונות בבת אחת, ללא אובדן איכות.
-        <strong>הקבצים לא נשלחים לשום שרת</strong> – כל ההמרה מתבצעת בדפדפן שלכם.
+        <strong>הקבצים לא נשלחים לשום שרת</strong> – כל ההמרה מתבצעת בדפדפן שלכם, וגם עובדת בלי חיבור לאינטרנט.
       </p>
     </header>
 
+    <section class="options" aria-label="אפשרויות">
+      <label class="check">
+        <input id="keep-metadata" type="checkbox">
+        <span>שמירת נתוני התמונה (תאריך צילום, דגם מצלמה ומיקום GPS)</span>
+      </label>
+      <label class="field" id="format-field" hidden>
+        <span>פורמט פלט</span>
+        <select id="format">
+          <option value="png">PNG</option>
+          <option value="webp">WebP ללא אובדן (קובץ קטן יותר)</option>
+        </select>
+      </label>
+    </section>
+
     <label id="dropzone" class="dropzone" tabindex="0">
-      <input id="file-input" type="file" accept=".jpg,.jpeg,.jfif,image/jpeg" multiple hidden>
+      <input id="file-input" type="file" accept=".jpg,.jpeg,.jfif,.heic,.heif,image/jpeg,image/heic,image/heif" multiple hidden>
       <span class="dz-icon" aria-hidden="true">⬆</span>
-      <span class="dz-title">גררו לכאן קבצי JPG או לחצו לבחירה</span>
+      <span class="dz-title">גררו לכאן קבצי JPG או תיקייה, או לחצו לבחירה</span>
       <span class="dz-hint" id="limits-hint"></span>
     </label>
+    <div class="pick-row">
+      <input id="folder-input" type="file" webkitdirectory multiple hidden>
+      <button id="pick-folder" class="secondary" type="button">בחירת תיקייה שלמה</button>
+      <span class="dz-hint">אפשר גם להדביק תמונה עם Ctrl+V</span>
+    </div>
 
     <section id="summary" class="summary" hidden>
       <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
         <div class="progress-bar" id="progress-bar"></div>
       </div>
       <p id="status-text" aria-live="polite"></p>
+      <p id="size-text" class="size-text"></p>
       <div class="actions">
-        <button id="download-zip" class="primary" disabled>הורדת הכל כ-ZIP</button>
-        <button id="clear" class="secondary">ניקוי</button>
+        <button id="download-zip" class="primary" type="button" disabled>הורדת הכל כ-ZIP</button>
+        <button id="save-folder" class="secondary" type="button" hidden>שמירה ישירה לתיקייה</button>
+        <button id="stop" class="secondary" type="button" hidden>עצירה</button>
+        <button id="clear" class="secondary" type="button">ניקוי</button>
       </div>
+      <p id="folder-text" class="folder-text" hidden></p>
     </section>
 
     <p id="message" class="message" role="alert" hidden></p>
@@ -42,8 +71,8 @@
     <ul id="file-list" class="file-list"></ul>
 
     <footer>
-      PNG הוא פורמט ללא דחיסה מאבדת – כל פיקסל של התמונה המקורית נשמר כפי שהוא.
-      הקבצים נשמרים רק בזיכרון הדפדפן ונמחקים בעת ניקוי או סגירת הדף.
+      PNG הוא פורמט ללא דחיסה מאבדת – כל פיקסל של התמונה המקורית נשמר כפי שהוא, כולל צבעים רחבים
+      (Display P3) של מצלמות טלפון. הקבצים נשמרים רק בזיכרון הדפדפן ונמחקים בעת ניקוי או סגירת הדף.
       <p class="credit">נבנה על ידי <bdi>Netzer Mishaly</bdi></p>
     </footer>
   </main>

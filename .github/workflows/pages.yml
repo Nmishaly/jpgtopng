@@ -1,21 +1,16 @@
-name: Deploy to GitHub Pages
+name: Test and deploy to GitHub Pages
 
 on:
   push:
     branches: [main, ccr-5fa1ed7d-u762ln]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
-  build:
+  unit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -23,17 +18,56 @@ jobs:
         with:
           node-version: 22
       - run: npm test
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
+
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          path: public
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Download HEIC test image (from the libheif project)
+        run: |
+          mkdir -p e2e/fixtures
+          curl -fsSL -o e2e/fixtures/example.heic \
+            https://raw.githubusercontent.com/strukturag/libheif/master/examples/example.heic
+      - run: npx playwright test --project=${{ matrix.browser }}
+        env:
+          CI: true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-${{ matrix.browser }}
+          path: test-results/
+          retention-days: 7
 
   deploy:
-    needs: build
+    if: github.event_name != 'pull_request'
+    needs: [unit, e2e]
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v5
+      - name: Stamp the offline cache with this commit
+        run: sed -i "s/const VERSION = 'dev'/const VERSION = '${GITHUB_SHA::12}'/" public/sw.js
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
       - id: deployment
         uses: actions/deploy-pages@v4

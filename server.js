@@ -13,10 +13,16 @@ const TYPES = {
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.png': 'image/png',
+  '.webmanifest': 'application/manifest+json',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/plain; charset=utf-8',
 };
 const SECURITY_HEADERS = {
   'Content-Security-Policy':
-    "default-src 'self'; img-src 'self' blob: data:; worker-src 'self'; connect-src 'none'; " +
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; img-src 'self' blob: data:; " +
+    "worker-src 'self'; connect-src 'none'; " +
     "object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
@@ -42,8 +48,11 @@ const server = createServer(async (req, res) => {
   }
   try {
     const body = await readFile(filePath);
+    const headers = { ...SECURITY_HEADERS };
+    // The offline service worker must be able to fetch the site's own files.
+    if (filePath.endsWith(`${sep}sw.js`)) headers['Content-Security-Policy'] = "default-src 'self'";
     res.writeHead(200, {
-      ...SECURITY_HEADERS,
+      ...headers,
       'Content-Type': TYPES[extname(filePath)] || 'application/octet-stream',
       'Content-Length': body.length,
     });

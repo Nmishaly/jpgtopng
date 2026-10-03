@@ -91,6 +91,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   display: flex; align-items: center; gap: 12px; padding: 10px 12px;
   background: var(--card); border: 1px solid var(--border); border-radius: 10px;
 }
+.file-list .thumb {
+  flex: none; width: 48px; height: 48px; border-radius: 6px; overflow: hidden;
+  background: var(--accent-soft); display: grid; place-items: center;
+}
+.file-list .thumb img { width: 100%; height: 100%; object-fit: cover; }
 .file-list .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-list .meta { font-size: .8rem; color: var(--muted); direction: ltr; text-align: right; }
 .file-list .state { font-size: .875rem; white-space: nowrap; color: var(--muted); }
@@ -99,3 +104,30 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 
 footer { margin-top: 32px; font-size: .85rem; color: var(--muted); }
 .credit { margin: 16px 0 0; padding-top: 16px; border-top: 1px solid var(--border); }
+
+.options {
+  display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center;
+  margin-bottom: 16px;
+}
+.check { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.check input { margin-top: 5px; accent-color: var(--accent); }
+.field { display: flex; gap: 8px; align-items: center; }
+select {
+  font: inherit; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+}
+.pick-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 12px; }
+.size-text, .folder-text { margin: -4px 0 12px; font-size: .875rem; color: var(--muted); }
+.folder-text { margin: 12px 0 0; color: var(--ok); }
+.item-actions { display: flex; gap: 12px; align-items: center; }
+button.remove {
+  padding: 0 6px; background: none; border: 0; color: var(--muted);
+  font-size: 1.25rem; line-height: 1;
+}
+button.remove:hover { color: var(--err); }
+.file-list li { flex-wrap: wrap; }
+.file-list .meta { white-space: normal; }
+@media (max-width: 480px) {
+  /* Status gets its own line under the file name so neither is squeezed. */
+  .file-list .state { order: 4; flex-basis: 100%; padding-inline-start: 60px; white-space: normal; }
+}

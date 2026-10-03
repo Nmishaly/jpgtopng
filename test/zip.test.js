@@ -11,7 +11,7 @@ test('crc32 matches known values', () => {
   assert.equal(crc32(new TextEncoder().encode('123456789')), 0xcbf43926);
 });
 
-test('builds a valid archive with UTF-8 names that a standard reader can extract', async () => {
+for (const forceZip64 of [false, true]) test(`builds a valid ${forceZip64 ? 'ZIP64 ' : ''}archive with UTF-8 names that a standard reader can extract`, async () => {
   const files = [
     { name: 'a.png', bytes: new TextEncoder().encode('hello') },
     { name: 'תמונה (1).png', bytes: new Uint8Array(1000).map((_, i) => i % 256) },
@@ -22,7 +22,7 @@ test('builds a valid archive with UTF-8 names that a standard reader can extract
     size: f.bytes.length,
     crc: crc32(f.bytes),
   }));
-  const zip = new Blob(buildZipParts(entries));
+  const zip = new Blob(buildZipParts(entries, { forceZip64 }));
   const dir = mkdtempSync(join(tmpdir(), 'zip-test-'));
   try {
     const zipPath = join(dir, 'out.zip');
