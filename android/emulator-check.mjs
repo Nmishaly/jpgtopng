@@ -255,8 +255,11 @@ await drop([{ name: 'auto2.jpg', type: 'image/jpeg', b64: small }]);
 await waitIdle();
 await waitFor(() => [...document.querySelectorAll('#file-list li .state')]
   .every((s) => s.textContent === 'נשמר במכשיר'), null, 60_000);
-const listing = sh('ls /sdcard/Pictures/JPGtoPNG/');
-log('Pictures/JPGtoPNG:', listing.replace(/\n/g, ' '));
+// Same folder the first save reported (Android 9 may fall back to the app's own folder).
+const imageDir = savedPath[0].replace(/\/[^/]+$/, '');
+if (!imageDir.startsWith('Pictures/')) log('note: shared folder refused, saved in', imageDir);
+const listing = sh(`ls '/sdcard/${imageDir}/'`);
+log(`${imageDir}:`, listing.replace(/\n/g, ' '));
 if (!/auto1\.png/.test(listing) || !/auto2\.png/.test(listing)) fail('auto-saved files missing');
 
 writeFileSync('android-screenshot.png', adb('exec-out', 'screencap', '-p'));
