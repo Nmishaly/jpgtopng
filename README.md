@@ -14,6 +14,13 @@
 
 כדי לשתף אותו עם אחרים, פתחו את הקישור והשתמשו בתפריט **Share** של הדף. לעדכון הדף אחרי שינוי בקוד מריצים `npm run build:artifact` ומפרסמים מחדש את התיקייה `dist/artifact/`.
 
+## GitHub Pages
+
+האתר נפרס אוטומטית ל-GitHub Pages בכל דחיפה לענף הראשי (`.github/workflows/pages.yml`), בכתובת:
+https://nmishaly.github.io/jpgtopng/
+
+הגדרה חד-פעמית: **Settings → Pages → Source: GitHub Actions**. במאגר פרטי GitHub Pages דורש מנוי בתשלום; בחשבון חינמי יש להפוך את המאגר לציבורי.
+
 ## הרצה
 
 ```bash
