@@ -159,9 +159,12 @@ log('zip entries:', names);
 if (names !== 'z1.png,z2.png,z3.png') fail('zip content mismatch');
 
 // 5. Automatic saving to the device
+// Turning it on saves what is already converted, and then each new file.
 await page.click('#clear');
+await paste([{ name: 'auto1.jpg', type: 'image/jpeg', b64: small }]);
+await waitIdle();
 await page.click('#save-folder');
-await paste([{ name: 'auto1.jpg', type: 'image/jpeg', b64: small }, { name: 'auto2.jpg', type: 'image/jpeg', b64: small }]);
+await paste([{ name: 'auto2.jpg', type: 'image/jpeg', b64: small }]);
 await waitIdle();
 await page.waitForFunction(() => [...document.querySelectorAll('#file-list li .state')].every((s) => s.textContent === 'נשמר במכשיר'), null, { timeout: 60_000 });
 const listing = await sh('ls /sdcard/Pictures/JPGtoPNG/');
