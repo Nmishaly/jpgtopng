@@ -265,8 +265,14 @@ public class MainActivity extends Activity {
                         lastError = "יש לאשר את הרשאת האחסון ולנסות שוב";
                         return "";
                     }
+                    String state = Environment.getExternalStorageState();
+                    if (!Environment.MEDIA_MOUNTED.equals(state)) {
+                        throw new IOException("Storage is not available (" + state + ")");
+                    }
                     File dir = new File(Environment.getExternalStoragePublicDirectory(base), SUBFOLDER);
-                    if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("Cannot create " + dir);
+                    if (!dir.isDirectory() && !dir.mkdirs()) {
+                        throw new IOException("Cannot create " + dir + " (storage " + state + ")");
+                    }
                     sink.file = uniqueFile(dir, name);
                     sink.name = sink.file.getName();
                     sink.out = new FileOutputStream(sink.file);

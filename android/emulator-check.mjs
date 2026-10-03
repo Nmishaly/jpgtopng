@@ -73,11 +73,17 @@ async function connect() {
 
 const cdp = await (async () => {
   log('device', sh('getprop ro.product.model').trim(), 'API', sh('getprop ro.build.version.sdk').trim());
+  // Shared storage can lag behind boot on old emulators; wait until it is writable.
+  for (let i = 0; i < 60; i++) {
+    if (sh('mkdir -p /sdcard/Pictures && touch /sdcard/Pictures/.probe && echo ok || true').includes('ok')) break;
+    await sleep(1000);
+  }
+  sh('rm -f /sdcard/Pictures/.probe');
   // Android 9 and older ask for the storage permission at first save; grant it upfront.
-  try {
+  if (Number(sh('getprop ro.build.version.sdk')) <= 28) {
     sh(`pm grant ${PKG} android.permission.WRITE_EXTERNAL_STORAGE`);
-  } catch {
-    // not needed on newer Android
+    const granted = sh(`dumpsys package ${PKG} | grep WRITE_EXTERNAL_STORAGE || true`).trim();
+    log('storage permission:', granted.replace(/\s+/g, ' '));
   }
   sh('rm -rf /sdcard/Pictures/JPGtoPNG /sdcard/Download/JPGtoPNG');
   log('starting the app');
